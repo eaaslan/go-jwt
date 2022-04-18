@@ -10,12 +10,59 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
+	"golang.org/x/crypto/bcrypt"
 	"net/http"
 	"time"
 )
 
 var userCollection *mongo.Collection = database.OpenCollection(database.Client, "user")
 var validate = validator.New()
+
+func Login() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*100)
+		defer cancel()
+		user := &models.User{}
+		foundUser := &models.User{}
+
+		if err := c.BindJSON(&user); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err})
+			return
+		}
+		err := userCollection.FindOne(ctx, bson.M{"email": user.Email}).Decode(&foundUser)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err})
+			return
+		}
+
+		ok, err := VerifyPassword(*user.Password, *foundUser.Password)
+		defer cancel()
+
+		if !ok {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "password is not correct"})
+			return
+		}
+		token, refreshToken, _ := helpers.GenerateAllTokens(*user.Email, *user.FirstName, *user.LastName, *user.UserType, *&user.UserID)
+		helpers.UpdateAllToken(token, refreshToken, foundUser.UserID)
+		err = userCollection.FindOne(ctx, bson.M{"user_id": foundUser.UserID}).Decode(&foundUser)
+
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err})
+			return
+		}
+		c.JSON(http.StatusOK, foundUser)
+
+	}
+}
+
+func VerifyPassword(userPass, foundUserPass string) (bool, error) {
+
+	err := bcrypt.CompareHashAndPassword([]byte(userPass), []byte(foundUserPass))
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
 
 func Signup() gin.HandlerFunc {
 	return func(c *gin.Context) {
