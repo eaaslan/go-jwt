@@ -17,3 +17,10 @@ func MatchUserTypeToUid(c *gin.Context, userId string) error {
 
 	return nil
 }
+func CheckUserType(c *gin.Context, role string) error {
+	userType := c.GetString("user_type")
+	if userType != role {
+		return errors.New("unauthorized to access")
+	}
+	return nil
+}

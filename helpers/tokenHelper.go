@@ -2,6 +2,7 @@ package helpers
 
 import (
 	"context"
+	"errors"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/eaaslan/go-jwt/database"
 	"go.mongodb.org/mongo-driver/bson"
@@ -76,4 +77,23 @@ func UpdateAllToken(signedToken, signedRefreshToken, userID string) {
 		log.Fatalln(err)
 	}
 	return
+}
+
+func ValidateToken(signedToken string) (claims *SignedDetails, err error) {
+	token, err := jwt.ParseWithClaims(signedToken,
+		&SignedDetails{},
+		func(token *jwt.Token) (interface{}, error) {
+			return []byte(SECRET_KEY), nil
+		})
+
+	if err != nil {
+		return nil, err
+	}
+	claims, ok := token.Claims.(*SignedDetails)
+
+	if !ok {
+		err = errors.New("the token is invalid")
+		return nil, err
+	}
+	return claims, nil
 }
